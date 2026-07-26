@@ -3,11 +3,9 @@
 <head>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <meta charset="UTF-8">
-    <!-- This meta tag is strictly required to prevent mobile scaling issues -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Async PDF Summarizer</title>
     <style>
-        /* CSS Variables for a strict, minimalist monochromatic palette */
         :root {
             --bg: #f9fafb;
             --surface: #ffffff;
@@ -19,7 +17,6 @@
             --radius: 8px;
         }
 
-        /* Reset box-sizing so padding doesn't break mobile widths */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -64,12 +61,11 @@
 
         .upload-section {
             display: flex;
-            flex-direction: column; /* Stack vertically on phones */
+            flex-direction: column; 
             gap: 12px;
             margin-bottom: 24px;
         }
 
-        /* Snap to horizontal row on laptop/tablet screens (500px and up) */
         @media (min-width: 500px) {
             .upload-section {
                 flex-direction: row;
@@ -87,7 +83,6 @@
             cursor: pointer;
         }
 
-        /* Style the default browser "Choose File" button */
         input[type="file"]::file-selector-button {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -114,7 +109,7 @@
             font-weight: 500;
             cursor: pointer;
             transition: background-color 0.2s;
-            white-space: nowrap; /* Prevent button text from wrapping */
+            white-space: nowrap; 
         }
 
         button:hover {
@@ -139,7 +134,6 @@
             border: 1px solid transparent;
         }
 
-        /* Clean, semantic status colors */
         .status-uploading { background: #f3f4f6; color: #374151; }
         .status-processing { background: #fffbeb; color: #b45309; border-color: #fde68a; }
         .status-generating { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
@@ -198,7 +192,6 @@
             return;
         }
 
-        // Lock UI
         uploadBtn.disabled = true;
         summaryBox.style.display = "none";
         summaryBox.innerHTML = "";
@@ -256,13 +249,10 @@
         
         eventSource.onmessage = function(event) {
             try {
-                // 1. Safely unpack the JSON object
                 const parsedData = JSON.parse(event.data);
                 
-                // 2. Accumulate the pure text
                 rawMarkdown += parsedData.text;
                 
-                // 3. Compile to HTML
                 summaryBox.innerHTML = marked.parse(rawMarkdown);
             } catch (err) {
                 console.error("Failed to parse chunk:", err);
