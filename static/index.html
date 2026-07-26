@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <meta charset="UTF-8">
+    <!-- This meta tag is strictly required to prevent mobile scaling issues -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Async PDF Summarizer</title>
+    <style>
+        /* CSS Variables for a strict, minimalist monochromatic palette */
+        :root {
+            --bg: #f9fafb;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-light: #6b7280;
+            --primary: #111827;
+            --primary-hover: #374151;
+            --radius: 8px;
+        }
+
+        /* Reset box-sizing so padding doesn't break mobile widths */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 640px;
+            background: var(--surface);
+            padding: 32px;
+            border-radius: var(--radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border);
+            margin-top: 6vh;
+            height: fit-content;
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            letter-spacing: -0.01em;
+        }
+
+        p.subtitle {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+
+        .upload-section {
+            display: flex;
+            flex-direction: column; /* Stack vertically on phones */
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        /* Snap to horizontal row on laptop/tablet screens (500px and up) */
+        @media (min-width: 500px) {
+            .upload-section {
+                flex-direction: row;
+            }
+        }
+
+        input[type="file"] {
+            flex-grow: 1;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.9rem;
+            color: var(--text);
+            background: var(--bg);
+            cursor: pointer;
+        }
+
+        /* Style the default browser "Choose File" button */
+        input[type="file"]::file-selector-button {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            margin-right: 12px;
+            cursor: pointer;
+            color: var(--text);
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background: var(--border);
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            white-space: nowrap; /* Prevent button text from wrapping */
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: var(--border);
+            color: var(--text-light);
+            cursor: not-allowed;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 16px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid transparent;
+        }
+
+        /* Clean, semantic status colors */
+        .status-uploading { background: #f3f4f6; color: #374151; }
+        .status-processing { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+        .status-generating { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        .status-error { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+
+        .summary-box {
+            background: var(--bg);
+            padding: 24px;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            color: var(--text);
+            min-height: 150px;
+            white-space: pre-wrap;
+            border: 1px solid var(--border);
+            margin-top: 8px;
+        }
+        .summary-box h3 { margin-top: 16px; margin-bottom: 8px; font-size: 1.1rem; }
+        .summary-box p { margin-bottom: 12px; }
+        .summary-box ul { margin-left: 20px; margin-bottom: 12px; }
+        .summary-box strong { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Document Summarizer</h1>
+    <p class="subtitle">Upload a PDF to instantly extract and summarize its contents.</p>
+    
+    <div class="upload-section">
+        <input type="file" id="pdfInput" accept="application/pdf">
+        <button id="uploadBtn" onclick="processDocument()">Summarize</button>
+    </div>
+
+    <div id="statusBadge" class="status-badge" style="display: none;"></div>
+    
+    <div id="summaryBox" class="summary-box" style="display: none;"></div>
+</div>
+
+<script>
+    let pollInterval;
+
+    function updateStatus(text, className, show = true) {
+        const badge = document.getElementById('statusBadge');
+        badge.innerText = text;
+        badge.className = 'status-badge ' + className;
+        badge.style.display = show ? 'block' : 'none';
+    }
+
+    async function processDocument() {
+        const fileInput = document.getElementById('pdfInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const summaryBox = document.getElementById('summaryBox');
+
+        if (!fileInput.files[0]) {
+            alert("Please select a PDF file first.");
+            return;
+        }
+
+        // Lock UI
+        uploadBtn.disabled = true;
+        summaryBox.style.display = "none";
+        summaryBox.innerHTML = "";
+        updateStatus("Uploading to server...", "status-uploading");
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        try {
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            if (!response.ok) throw new Error("Upload failed");
+            
+            const data = await response.json();
+            const jobId = data.job_id;
+            
+            updateStatus("Extracting text...", "status-processing");
+            pollInterval = setInterval(() => checkStatus(jobId, summaryBox), 2000);
+
+        } catch (error) {
+            updateStatus("Error: " + error.message, "status-error");
+            uploadBtn.disabled = false;
+        }
+    }
+
+    async function checkStatus(jobId, summaryBox) {
+        try {
+            const response = await fetch(`/jobs/${jobId}`);
+            if (response.status === 400) return; // Still processing
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === "completed") {
+                    clearInterval(pollInterval);
+                    updateStatus("Streaming AI Summary...", "status-generating");
+                    startStreaming(jobId, summaryBox);
+                }
+                else if (data.status === "failed") {
+                    clearInterval(pollInterval);
+                    updateStatus("Error: " + (data.error_detail || "No selectable text found in PDF."), "status-error");
+                    uploadBtn.disabled = false;
+                }
+            }
+        } catch (error) {
+            console.error("Polling error:", error);
+        }
+    }
+
+    marked.setOptions({ breaks: true });
+
+    function startStreaming(jobId, summaryBox) {
+        summaryBox.style.display = "block";
+        const eventSource = new EventSource(`/jobs/${jobId}/summary`);
+        
+        let rawMarkdown = "";
+        
+        eventSource.onmessage = function(event) {
+            try {
+                // 1. Safely unpack the JSON object
+                const parsedData = JSON.parse(event.data);
+                
+                // 2. Accumulate the pure text
+                rawMarkdown += parsedData.text;
+                
+                // 3. Compile to HTML
+                summaryBox.innerHTML = marked.parse(rawMarkdown);
+            } catch (err) {
+                console.error("Failed to parse chunk:", err);
+            }
+        };
+        
+        eventSource.onerror = function(event) {
+            eventSource.close();
+            updateStatus("Summary Complete", "status-uploading", false);
+            document.getElementById('uploadBtn').disabled = false;
+        };
+    }
+    
+</script>
+
+</body>
+</html>
