@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: jobsdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - REDIS_HOST=redis
+      - LLM_API_KEY=${LLM_API_KEY}
+      - DATABASE_URL=postgresql://myuser:mypassword@db:5432/jobsdb
+    depends_on:
+      - redis
+      - db
+
+  worker:
+    build: .
+    command: arq worker.WorkerSettings
+    volumes:
+      - .:/app
+    environment:
+      - REDIS_HOST=redis
+      - LLM_API_KEY=${LLM_API_KEY}
+      - DATABASE_URL=postgresql://myuser:mypassword@db:5432/jobsdb
+    depends_on:
+      - redis
+      - db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
